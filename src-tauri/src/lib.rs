@@ -440,6 +440,33 @@ fn get_project_path(state: State<AppState>) -> Option<String> {
     state.project_path.lock().unwrap().clone()
 }
 
+#[tauri::command]
+fn open_file(path: String) -> Result<(), String> {
+    // Use the system's default program to open the file
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Parse command line args for project path
@@ -461,7 +488,7 @@ pub fn run() {
         .manage(AppState {
             project_path: Mutex::new(project_path),
         })
-        .invoke_handler(tauri::generate_handler![get_resources, get_project_path])
+        .invoke_handler(tauri::generate_handler![get_resources, get_project_path, open_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -3,6 +3,17 @@ import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import type { ResourceGroup, Resource } from './types'
+import {
+  GridLayout,
+  TabsLayout,
+  FavoritesLayout,
+  DockLayout,
+  PaletteLayout,
+  KanbanLayout,
+  LAYOUT_OPTIONS,
+  LayoutType,
+  LayoutVariant
+} from './layouts'
 import './App.css'
 
 function App() {
@@ -10,13 +21,51 @@ function App() {
   const [filter, setFilter] = useState('')
   const [alwaysOnTop, setAlwaysOnTop] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [layout, setLayout] = useState<LayoutType>('list')
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('claude-palette-favorites')
+    return saved ? new Set(JSON.parse(saved)) : new Set()
+  })
+  const [variants, setVariants] = useState<Record<string, LayoutVariant>>(() => {
+    const saved = localStorage.getItem('claude-palette-variants')
+    return saved ? JSON.parse(saved) : {}
+  })
   const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set())
   const [projectPath, setProjectPath] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     loadResources()
     loadProjectPath()
+    const savedLayout = localStorage.getItem('claude-palette-layout') as LayoutType
+    if (savedLayout) setLayout(savedLayout)
   }, [])
+
+  async function loadProjectPath() {
+    try {
+      const path = await invoke<string | null>('get_project_path')
+      setProjectPath(path ?? undefined)
+    } catch (e) {
+      console.error('Failed to get project path:', e)
+    }
+  }
+
+  useEffect(() => {
+    localStorage.setItem('claude-palette-favorites', JSON.stringify([...favorites]))
+  }, [favorites])
+
+  useEffect(() => {
+    localStorage.setItem('claude-palette-layout', layout)
+  }, [layout])
+
+  useEffect(() => {
+    localStorage.setItem('claude-palette-variants', JSON.stringify(variants))
+  }, [variants])
+
+  const currentVariant: LayoutVariant = variants[layout] || 'standard'
+
+  function setCurrentVariant(variant: LayoutVariant) {
+    setVariants(prev => ({ ...prev, [layout]: variant }))
+  }
 
   async function loadResources() {
     setLoading(true)
@@ -29,15 +78,6 @@ function App() {
     setLoading(false)
   }
 
-  async function loadProjectPath() {
-    try {
-      const path = await invoke<string | null>('get_project_path')
-      setProjectPath(path ?? undefined)
-    } catch (e) {
-      console.error('Failed to get project path:', e)
-    }
-  }
-
   async function toggleAlwaysOnTop() {
     const newValue = !alwaysOnTop
     await getCurrentWindow().setAlwaysOnTop(newValue)
@@ -48,6 +88,26 @@ function App() {
     setGroups(prev =>
       prev.map(g => (g.type === type ? { ...g, collapsed: !g.collapsed } : g))
     )
+  }
+
+  async function handleOpenFile(path: string) {
+    try {
+      await invoke('open_file', { path })
+    } catch (e) {
+      console.error('Failed to open file:', e)
+    }
+  }
+
+  function toggleFavorite(resourceId: string) {
+    setFavorites(prev => {
+      const next = new Set(prev)
+      if (next.has(resourceId)) {
+        next.delete(resourceId)
+      } else {
+        next.add(resourceId)
+      }
+      return next
+    })
   }
 
   function toggleSelection(resourceId: string) {
@@ -66,6 +126,12 @@ function App() {
     setSelectedResources(new Set())
   }
 
+  function openPreview(resource: Resource) {
+    // For Tauri, we'll just open the file in the default editor
+    // A proper preview modal could be added later
+    handleOpenFile(resource.path)
+  }
+
   // Get the appropriate path for a resource
   function getResourcePath(resource: Resource): string {
     if (resource.scope === 'project' && projectPath) {
@@ -75,6 +141,11 @@ function App() {
     return resource.path
   }
 
+  const getSelectedResourceObjects = useCallback((): Resource[] => {
+    const allResources = groups.flatMap(g => g.resources)
+    return allResources.filter(r => selectedResources.has(r.id))
+  }, [groups, selectedResources])
+
   // Format resource for clipboard
   function formatResourceForCopy(r: Resource): string {
     if (r.type === 'command') {
@@ -83,11 +154,6 @@ function App() {
     return `<${r.type}>${getResourcePath(r).trim()}</${r.type}>`
   }
 
-  const getSelectedResourceObjects = useCallback((): Resource[] => {
-    const allResources = groups.flatMap(g => g.resources)
-    return allResources.filter(r => selectedResources.has(r.id))
-  }, [groups, selectedResources])
-
   async function copySelected() {
     const selected = getSelectedResourceObjects()
     if (selected.length === 0) return
@@ -95,13 +161,18 @@ function App() {
     await writeText(text)
   }
 
-  function handleDragStart(e: React.DragEvent, resource: Resource) {
-    if (selectedResources.has(resource.id)) {
+  function handleDragStart(e: React.DragEvent, path: string) {
+    const allResources = groups.flatMap(g => g.resources)
+    const draggedResource = allResources.find(r => r.path === path)
+
+    if (draggedResource && selectedResources.has(draggedResource.id)) {
       const selected = getSelectedResourceObjects()
       const text = selected.map(formatResourceForCopy).join('\n')
       e.dataTransfer.setData('text/plain', text)
+    } else if (draggedResource) {
+      e.dataTransfer.setData('text/plain', formatResourceForCopy(draggedResource))
     } else {
-      e.dataTransfer.setData('text/plain', formatResourceForCopy(resource))
+      e.dataTransfer.setData('text/plain', path.trim())
     }
     e.dataTransfer.effectAllowed = 'copy'
   }
@@ -115,11 +186,73 @@ function App() {
     )
   })).filter(g => g.resources.length > 0)
 
+  const layoutProps = {
+    groups: filteredGroups,
+    filter,
+    onDragStart: handleDragStart,
+    onOpenFile: handleOpenFile,
+    onPreview: openPreview,
+    favorites,
+    onToggleFavorite: toggleFavorite,
+    variant: currentVariant,
+    selectedResources,
+    onToggleSelection: toggleSelection
+  }
+
+  function renderLayout() {
+    if (loading) return <div className="loading">Loading resources...</div>
+
+    switch (layout) {
+      case 'grid':
+        return <GridLayout {...layoutProps} />
+      case 'tabs':
+        return <TabsLayout {...layoutProps} />
+      case 'favorites':
+        return <FavoritesLayout {...layoutProps} />
+      case 'dock':
+        return <DockLayout {...layoutProps} />
+      case 'palette':
+        return <PaletteLayout {...layoutProps} />
+      case 'kanban':
+        return <KanbanLayout {...layoutProps} />
+      default:
+        return <ListLayout groups={filteredGroups} toggleGroup={toggleGroup} handleDragStart={handleDragStart} selectedResources={selectedResources} onToggleSelection={toggleSelection} onPreview={openPreview} onOpenFile={handleOpenFile} />
+    }
+  }
+
   return (
-    <div className="app">
+    <div className={`app layout-${layout}`}>
       <header className="titlebar" data-tauri-drag-region>
         <span className="title">Claude Palette</span>
         <div className="controls">
+          <select
+            className="layout-select"
+            value={layout}
+            onChange={e => setLayout(e.target.value as LayoutType)}
+            title="Switch layout"
+          >
+            {LAYOUT_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {layout !== 'list' && (
+            <div className="variant-toggle">
+              <button
+                className={`variant-btn ${currentVariant === 'standard' ? 'active' : ''}`}
+                onClick={() => setCurrentVariant('standard')}
+                title="Standard variant"
+              >
+                Std
+              </button>
+              <button
+                className={`variant-btn ${currentVariant === 'enhanced' ? 'active' : ''}`}
+                onClick={() => setCurrentVariant('enhanced')}
+                title="Enhanced variant"
+              >
+                Enh
+              </button>
+            </div>
+          )}
           <button
             className={`pin-btn ${alwaysOnTop ? 'active' : ''}`}
             onClick={toggleAlwaysOnTop}
@@ -149,46 +282,7 @@ function App() {
       </div>
 
       <main className="content">
-        {loading ? (
-          <div className="loading">Loading resources...</div>
-        ) : filteredGroups.length === 0 ? (
-          <div className="empty">No resources found</div>
-        ) : (
-          filteredGroups.map(group => (
-            <section key={group.type} className="group">
-              <button className="group-header" onClick={() => toggleGroup(group.type)}>
-                <span className="chevron">{group.collapsed ? '>' : 'v'}</span>
-                <span className="group-label">{group.label}</span>
-                <span className="count">{group.resources.length}</span>
-              </button>
-              {!group.collapsed && (
-                <ul className="resources">
-                  {group.resources.map(resource => (
-                    <li
-                      key={resource.id}
-                      className={`resource ${selectedResources.has(resource.id) ? 'selected' : ''}`}
-                      draggable
-                      onDragStart={e => handleDragStart(e, resource)}
-                      onClick={() => toggleSelection(resource.id)}
-                      title={`${resource.path}\n\nClick to select, drag to copy`}
-                    >
-                      <div className="resource-name">
-                        {resource.type === 'command' && '/'}
-                        {resource.name}
-                        {resource.source === 'plugin' && (
-                          <span className="plugin-badge">{resource.pluginName}</span>
-                        )}
-                      </div>
-                      {resource.description && (
-                        <div className="resource-desc">{resource.description}</div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))
-        )}
+        {renderLayout()}
       </main>
 
       {selectedResources.size > 0 && (
@@ -203,6 +297,65 @@ function App() {
         </div>
       )}
     </div>
+  )
+}
+
+// Original list layout as inline component
+function ListLayout({ groups, toggleGroup, handleDragStart, selectedResources, onToggleSelection, onPreview, onOpenFile }: {
+  groups: ResourceGroup[]
+  toggleGroup: (type: string) => void
+  handleDragStart: (e: React.DragEvent, path: string) => void
+  selectedResources: Set<string>
+  onToggleSelection: (resourceId: string) => void
+  onPreview: (resource: Resource) => void
+  onOpenFile: (path: string) => void
+}) {
+  if (groups.length === 0) return <div className="empty">No resources found</div>
+
+  return (
+    <>
+      {groups.map(group => (
+        <section key={group.type} className="group">
+          <button className="group-header" onClick={() => toggleGroup(group.type)}>
+            <span className="chevron">{group.collapsed ? '>' : 'v'}</span>
+            <span className="group-label">{group.label}</span>
+            <span className="count">{group.resources.length}</span>
+          </button>
+          {!group.collapsed && (
+            <ul className="resources">
+              {group.resources.map(resource => (
+                <li
+                  key={resource.id}
+                  className={`resource ${selectedResources.has(resource.id) ? 'selected' : ''}`}
+                  draggable
+                  onDragStart={e => handleDragStart(e, resource.path)}
+                  onClick={() => onToggleSelection(resource.id)}
+                  onDoubleClick={e => {
+                    if (e.shiftKey) {
+                      onOpenFile(resource.path)
+                    } else {
+                      onPreview(resource)
+                    }
+                  }}
+                  title={`${resource.path}\n\nClick to select, drag to copy, double-click to preview, Shift+double-click to open in editor`}
+                >
+                  <div className="resource-name">
+                    {resource.type === 'command' && '/'}
+                    {resource.name}
+                    {resource.source === 'plugin' && (
+                      <span className="plugin-badge">{resource.pluginName}</span>
+                    )}
+                  </div>
+                  {resource.description && (
+                    <div className="resource-desc">{resource.description}</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+    </>
   )
 }
 
