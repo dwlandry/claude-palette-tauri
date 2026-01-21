@@ -18,16 +18,15 @@ A lightweight rewrite of [Claude Palette](https://github.com/dwlandry/claude-pal
 
 ## Download & Install
 
-### Option 1: Installer (Recommended)
+### Windows Installer (Recommended)
 Download `Claude Palette_0.1.0_x64-setup.exe` from [Releases](https://github.com/dwlandry/claude-palette-tauri/releases)
 
-Run the installer - done!
+Run the installer - it will automatically install WebView2 if needed.
 
-### Option 2: Portable
-Download `claude-palette-tauri.exe` - no installation needed, just run it.
+### MSI (Enterprise/Silent Install)
+Download `Claude Palette_0.1.0_x64_en-US.msi` for GPO deployment or silent install.
 
-### Option 3: MSI (Enterprise)
-Download `Claude Palette_0.1.0_x64_en-US.msi` for GPO deployment.
+> **Note:** Requires [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 10/11, installer handles this automatically).
 
 ---
 
@@ -35,12 +34,12 @@ Download `Claude Palette_0.1.0_x64_en-US.msi` for GPO deployment.
 
 **Global mode** - see all your `~/.claude` resources:
 ```
-Double-click "Claude Palette.exe"
+Launch "Claude Palette" from Start Menu or desktop shortcut
 ```
 
 **Project mode** - include local `.claude` resources too:
 ```
-claude-palette-tauri.exe "C:\path\to\your\project"
+"C:\Users\<you>\AppData\Local\Claude Palette\claude-palette-tauri.exe" "C:\path\to\your\project"
 ```
 
 ---
@@ -148,10 +147,11 @@ npm run tauri build
 ### Build Output
 ```
 src-tauri/target/release/
-├── claude-palette-tauri.exe          # Portable
+├── claude-palette-tauri.exe             # Dev/debug only (needs DLL)
+├── WebView2Loader.dll                   # Required runtime dependency
 └── bundle/
-    ├── msi/Claude Palette_*.msi      # MSI installer
-    └── nsis/Claude Palette_*-setup.exe  # NSIS installer
+    ├── msi/Claude Palette_*.msi         # MSI installer (for releases)
+    └── nsis/Claude Palette_*-setup.exe  # NSIS installer (for releases)
 ```
 
 ---
