@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import type { ResourceGroup, Resource } from './types'
 import {
@@ -14,7 +15,6 @@ import {
   LayoutType,
   LayoutVariant
 } from './layouts'
-import { PreviewModal } from './components/PreviewModal'
 import './App.css'
 
 function App() {
@@ -33,8 +33,6 @@ function App() {
   })
   const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set())
   const [projectPath, setProjectPath] = useState<string | undefined>(undefined)
-  const [previewResource, setPreviewResource] = useState<Resource | null>(null)
-  const [previewContent, setPreviewContent] = useState<string>('')
 
   useEffect(() => {
     loadResources()
@@ -131,17 +129,31 @@ function App() {
 
   async function openPreview(resource: Resource) {
     try {
-      const content = await invoke<string>('get_resource_content', { path: resource.path })
-      setPreviewContent(content)
-      setPreviewResource(resource)
-    } catch (e) {
-      console.error('Failed to load preview:', e)
-    }
-  }
+      // Pass the file path as URL param, preview window will load content itself
+      const params = new URLSearchParams({
+        path: resource.path,
+        name: resource.name,
+        type: resource.type,
+        ...(resource.pluginName && { pluginName: resource.pluginName }),
+      })
 
-  function closePreview() {
-    setPreviewResource(null)
-    setPreviewContent('')
+      // Create a new window for the preview
+      const previewWindow = new WebviewWindow('preview', {
+        url: `/preview.html?${params.toString()}`,
+        title: `Preview: ${resource.name}`,
+        width: 800,
+        height: 700,
+        minWidth: 400,
+        minHeight: 300,
+        center: true,
+      })
+
+      previewWindow.once('tauri://error', (e) => {
+        console.error('Failed to create preview window:', e)
+      })
+    } catch (e) {
+      console.error('Failed to open preview:', e)
+    }
   }
 
   // Get the appropriate path for a resource
@@ -308,12 +320,6 @@ function App() {
           </button>
         </div>
       )}
-
-      <PreviewModal
-        resource={previewResource}
-        content={previewContent}
-        onClose={closePreview}
-      />
     </div>
   )
 }

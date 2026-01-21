@@ -92,14 +92,23 @@ claude-palette-tauri.exe "C:\path\to\your\project"
 | Action | What Happens |
 |--------|--------------|
 | **Drag** any item | Pastes into Claude Code |
-| **Double-click** | Open in default editor |
+| **Double-click** | Preview in popup window |
+| **Shift+Double-click** | Open in default editor |
 | **Click** | Select (multi-select works!) |
 | **Pin button** | Keep window always on top |
 
 **Smart Copy:**
 - Commands paste as `/command-name` (ready to execute)
 - Other resources paste as `<type>path</type>`
+- Multi-select copies all on one line (no line breaks)
 - Project files use relative paths
+
+**Preview Window:**
+- Light theme optimized for readability
+- YAML frontmatter displayed as metadata cards
+- XML sections (`<role>`, `<constraints>`, etc.) rendered as styled blocks
+- Syntax-highlighted code blocks
+- Edit button to open in your default editor
 
 **7 Layout Options:**
 - List (classic collapsible groups)
@@ -160,8 +169,10 @@ Tauri 2.x + React 19 + TypeScript + Vite + Rust
 ```
 src/                    # React frontend
   ├── App.tsx           # Main component
-  ├── layouts/          # 6 layout components
-  └── utils/            # Helpers
+  ├── preview.tsx       # Preview window component
+  ├── preview-styles.css # Preview window styles
+  ├── layouts/          # 7 layout components
+  └── types.ts          # TypeScript interfaces
 src-tauri/              # Rust backend
   └── src/lib.rs        # Scanner + IPC commands
 ```
