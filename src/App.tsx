@@ -14,6 +14,7 @@ import {
   LayoutType,
   LayoutVariant
 } from './layouts'
+import { PreviewModal } from './components/PreviewModal'
 import './App.css'
 
 function App() {
@@ -32,6 +33,8 @@ function App() {
   })
   const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set())
   const [projectPath, setProjectPath] = useState<string | undefined>(undefined)
+  const [previewResource, setPreviewResource] = useState<Resource | null>(null)
+  const [previewContent, setPreviewContent] = useState<string>('')
 
   useEffect(() => {
     loadResources()
@@ -126,10 +129,19 @@ function App() {
     setSelectedResources(new Set())
   }
 
-  function openPreview(resource: Resource) {
-    // For Tauri, we'll just open the file in the default editor
-    // A proper preview modal could be added later
-    handleOpenFile(resource.path)
+  async function openPreview(resource: Resource) {
+    try {
+      const content = await invoke<string>('get_resource_content', { path: resource.path })
+      setPreviewContent(content)
+      setPreviewResource(resource)
+    } catch (e) {
+      console.error('Failed to load preview:', e)
+    }
+  }
+
+  function closePreview() {
+    setPreviewResource(null)
+    setPreviewContent('')
   }
 
   // Get the appropriate path for a resource
@@ -157,7 +169,7 @@ function App() {
   async function copySelected() {
     const selected = getSelectedResourceObjects()
     if (selected.length === 0) return
-    const text = selected.map(formatResourceForCopy).join('\n')
+    const text = selected.map(formatResourceForCopy).join(' ')
     await writeText(text)
   }
 
@@ -167,10 +179,10 @@ function App() {
 
     if (draggedResource && selectedResources.has(draggedResource.id)) {
       const selected = getSelectedResourceObjects()
-      const text = selected.map(formatResourceForCopy).join('\n')
+      const text = selected.map(formatResourceForCopy).join(' ')
       e.dataTransfer.setData('text/plain', text)
     } else if (draggedResource) {
-      e.dataTransfer.setData('text/plain', formatResourceForCopy(draggedResource))
+      e.dataTransfer.setData('text/plain', formatResourceForCopy(draggedResource).trim())
     } else {
       e.dataTransfer.setData('text/plain', path.trim())
     }
@@ -223,7 +235,7 @@ function App() {
   return (
     <div className={`app layout-${layout}`}>
       <header className="titlebar" data-tauri-drag-region>
-        <span className="title">Claude Palette</span>
+        <span className="title" data-tauri-drag-region>Claude Palette</span>
         <div className="controls">
           <select
             className="layout-select"
@@ -296,6 +308,12 @@ function App() {
           </button>
         </div>
       )}
+
+      <PreviewModal
+        resource={previewResource}
+        content={previewContent}
+        onClose={closePreview}
+      />
     </div>
   )
 }

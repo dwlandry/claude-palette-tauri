@@ -441,6 +441,11 @@ fn get_project_path(state: State<AppState>) -> Option<String> {
 }
 
 #[tauri::command]
+fn get_resource_content(path: String) -> Result<String, String> {
+    fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[tauri::command]
 fn open_file(path: String) -> Result<(), String> {
     // Use the system's default program to open the file
     #[cfg(target_os = "windows")]
@@ -488,7 +493,7 @@ pub fn run() {
         .manage(AppState {
             project_path: Mutex::new(project_path),
         })
-        .invoke_handler(tauri::generate_handler![get_resources, get_project_path, open_file])
+        .invoke_handler(tauri::generate_handler![get_resources, get_project_path, get_resource_content, open_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
