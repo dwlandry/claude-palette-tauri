@@ -481,12 +481,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  overflow: hidden;
 }
 
 .favorites-section {
   background: var(--bg-secondary);
   border-radius: 6px;
   padding: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.favorites-section .favorites-bar {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .section-header {
@@ -729,10 +740,14 @@ body {
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
+.dock-item {
+  position: relative;
+}
+
 .dock-item:hover {
   transform: scale(1.2);
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  z-index: 1;
+  z-index: 100;
 }
 
 .dock-item:active {
@@ -754,6 +769,7 @@ body {
   background: var(--bg-secondary);
   border-radius: 8px;
   padding: 10px;
+  overflow: visible;
 }
 
 .dock-layout.enhanced .dock-label {
@@ -768,7 +784,16 @@ body {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  overflow-y: visible;
+  padding-bottom: 8px;
+  padding-top: 8px;
+  margin-top: -8px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.dock-shelf::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .dock-card {
@@ -779,14 +804,17 @@ body {
   border-radius: 6px;
   padding: 8px 12px;
   cursor: grab;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.1s, box-shadow 0.1s, z-index 0s;
   min-width: 120px;
   max-width: 180px;
+  position: relative;
+  z-index: 1;
 }
 
 .dock-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 10;
 }
 
 .dock-card:active {

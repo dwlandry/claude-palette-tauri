@@ -21,7 +21,9 @@ export function PaletteLayout({ groups, filter, onDragStart, onOpenFile, onPrevi
       r.name.toLowerCase().includes(filter.toLowerCase()) ||
       r.description?.toLowerCase().includes(filter.toLowerCase()) ||
       formatResourceName(r.name).toLowerCase().includes(filter.toLowerCase())
-  ).slice(0, 15) // Limit results
+  )
+  // Only limit results when actively filtering to keep UI responsive
+  const displayResults = filter.trim() ? filtered.slice(0, 20) : filtered
 
   const isEnhanced = variant === 'enhanced'
 
@@ -35,21 +37,21 @@ export function PaletteLayout({ groups, filter, onDragStart, onOpenFile, onPrevi
         setIsOpen(false)
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSelectedIndex(i => Math.min(i + 1, filtered.length - 1))
+        setSelectedIndex(i => Math.min(i + 1, displayResults.length - 1))
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         setSelectedIndex(i => Math.max(i - 1, 0))
-      } else if (e.key === 'Enter' && filtered[selectedIndex]) {
+      } else if (e.key === 'Enter' && displayResults[selectedIndex]) {
         if (e.shiftKey) {
-          onOpenFile(filtered[selectedIndex].path)
+          onOpenFile(displayResults[selectedIndex].path)
         } else {
-          onPreview(filtered[selectedIndex])
+          onPreview(displayResults[selectedIndex])
         }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [filtered, selectedIndex, onOpenFile, onPreview])
+  }, [displayResults, selectedIndex, onOpenFile, onPreview])
 
   if (!isOpen) {
     return (
@@ -71,10 +73,10 @@ export function PaletteLayout({ groups, filter, onDragStart, onOpenFile, onPrevi
       </div>
 
       <div className="palette-results">
-        {filtered.length === 0 ? (
+        {displayResults.length === 0 ? (
           <div className="palette-empty">No results for "{filter}"</div>
         ) : (
-          filtered.map((resource, index) => (
+          displayResults.map((resource, index) => (
             <div
               key={resource.id}
               className={`palette-item ${index === selectedIndex ? 'selected' : ''} ${selectedResources.has(resource.id) ? 'selected-multi' : ''}`}
